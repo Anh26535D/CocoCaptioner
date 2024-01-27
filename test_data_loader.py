@@ -30,6 +30,8 @@ def main(config):
     test_loader = create_loader(test_ds, config['batch_size_test'], 0, False, coco_collate_fn)
 
     clip_path = './models/clip'
+    if not os.path.exists(clip_path):
+        save_clip(clip_path)
     model_clip = CLIPModel.from_pretrained(clip_path)
 
     for i, (image, caption, image_id, captions) in enumerate(train_loader):
