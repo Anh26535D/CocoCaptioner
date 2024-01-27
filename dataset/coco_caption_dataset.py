@@ -25,7 +25,7 @@ class coco_dataset(Dataset):
             filename = each['image']
             coco_url = each['coco_url']
             captions = [cap.lower() for cap in each['captions']]
-
+            
             if is_train:
                 for caption in captions:
                     self.ann_new.append({'image_id': image_id, 'filename': filename, 'coco_url': coco_url, 'caption': caption, 'captions': captions})
