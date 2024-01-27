@@ -8,11 +8,10 @@ from torch.utils.data import Dataset
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 Image.MAX_IMAGE_PIXELS = None
-IMAGE_SIZE = 384
 
 
 class coco_dataset(Dataset):
-    def __init__(self, ann_file, transform, root_path, max_words_per_cap=50, is_train=True):
+    def __init__(self, ann_file, transform, root_path, max_words_per_cap=30, is_train=True):
         with open(ann_file, 'r') as f:
             self.ann = json.load(f)
         self.transform = transform

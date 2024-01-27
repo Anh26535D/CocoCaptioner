@@ -1,0 +1,12 @@
+train_file: 'data/coco_captions/annotations/captions_train_2014.json'
+val_file: 'data/coco_captions/annotations/captions_test_2014.json'        
+test_file: 'data/coco_captions/annotations/captions_test_2014.json'
+
+coco_root: 'img_root/coco_2014/'
+
+batch_size_train: 1
+batch_size_test: 1
+batch_size_val: 1
+
+image_size: 224
+max_words_per_cap: 30
