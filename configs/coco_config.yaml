@@ -4,9 +4,25 @@ test_file: 'data/coco_captions/annotations/captions_test_2014.json'
 
 coco_root: 'img_root/coco_2014/'
 
+# General config
+device: 'cpu'
+model_output_dir: 'output/models/'
+result_output_dir: 'output/results/'
+
+# Data loader config
 batch_size_train: 1
 batch_size_test: 1
 batch_size_val: 1
 
-image_size: 224
+# Dataset config
+image_size: 384
 max_words_per_cap: 30
+eos: '[SEP]'
+
+# Pretrained model config
+clip_name: 'openai/clip-vit-base-patch16'
+bert_tokenizer_name: 'bert-base-uncased'
+
+# Optimizer and Scheduler config
+optimizer: {opt: adamW, lr: 1e-5, weight_decay: 0.02}
+scheduler: {sched: cosine, lr: 1e-5, num_epochs: 2, min_lr: 1e-6, decay_rate: 1, warmup_lr: 1e-5, warmup_epochs: 4, cooldown_epochs: 0}
