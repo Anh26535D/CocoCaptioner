@@ -14,7 +14,7 @@ def create_dataset(config):
     train_transform = transforms.Compose([                        
             transforms.RandomResizedCrop(config['image_size'],scale=(0.5, 1.0), interpolation=Image.BICUBIC),
             transforms.RandomHorizontalFlip(),
-            RandomAugment(2,7,isPIL=True,augs=['Identity','AutoContrast','Equalize','Brightness','Sharpness',
+            RandomAugment(2,7,isPIL=True,augs=['Identity','Equalize','Brightness','Sharpness',
                                               'ShearX', 'ShearY', 'TranslateX', 'TranslateY', 'Rotate']),     
             transforms.ToTensor(),
             normalize,

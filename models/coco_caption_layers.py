@@ -3,6 +3,28 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class MemoryAdapterLayer(nn.Module):
+    def __init__(self, dim_query, dim_mem):
+        super(MemoryAdapterLayer, self).__init__()
+
+        self.query_transform = nn.Linear(dim_query, dim_mem)
+        self.memory_transform = nn.Linear(dim_mem, dim_query)
+
+    def forward(self, x, memory):
+        # x: (batch_size, seq_len, dim_query)
+        # memory: (batch_size, 1, dim_mem)
+
+        query = self.query_transform(x) # query: (batch_size, seq_len, dim_mem)
+
+        attention_scores = torch.matmul(query, memory.transpose(-2, -1)) # attention_scores: (batch_size, seq_len, 1)
+        attention_weights = F.softmax(attention_scores, dim=-1) # attention_weights: (batch_size, seq_len, 1)
+        attended_memory = torch.matmul(attention_weights, memory) # attended_memory: (batch_size, seq_len, dim_mem)
+
+        transformed_memory = self.memory_transform(attended_memory) # transformed_memory: (batch_size, seq_len, dim_query)
+
+        return x, transformed_memory
+    
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, embed_dim, num_heads, dropout=0.1):
         super(CausalSelfAttention, self).__init__()
@@ -58,16 +80,19 @@ class DecoderLayer(nn.Module):
         return out_seq
 
 
-if __name__ == "__main__":
-    embed_dim = 512
-    num_heads = 8
-    seq_len = 10
-    batch_size = 1 
-    decoder_layer = DecoderLayer(embed_dim=embed_dim, num_heads=num_heads)
+class TransformerDecoder(nn.Module):
+    def __init__(self, num_layers, d_model, nhead, dropout=0.1):
+        super(TransformerDecoder, self).__init__()
+        self.layers = nn.ModuleList([DecoderLayer(d_model, nhead, dropout) for _ in range(num_layers)])
 
-    in_seq = torch.rand(batch_size, embed_dim)
-    out_seq = torch.rand(seq_len, batch_size, embed_dim)
-    out_seq = decoder_layer(in_seq, out_seq)
+    def forward(self, x, memory):
+        self_attention_weights_list = []
+        cross_attention_weights_list = []
 
-    print("Output Sequence:", out_seq)
-    print("Output Shape:", out_seq.shape)
+        for layer in self.layers:
+            x, self_attention_weights, cross_attention_weights = layer(x, memory)
+            print(x)
+            self_attention_weights_list.append(self_attention_weights)
+            cross_attention_weights_list.append(cross_attention_weights)
+
+        return x, self_attention_weights_list, cross_attention_weights_list

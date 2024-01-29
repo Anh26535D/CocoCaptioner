@@ -7,7 +7,7 @@ import datetime
 
 import torch
 import ruamel.yaml as yaml
-from transformers import BertTokenizer
+from transformers import BertTokenizer, BertModel
 
 from dataset import create_dataset, create_loader, coco_collate_fn
 from models.coco_caption_model import CocoCaptioner
@@ -32,9 +32,9 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
         image = image.to(device, non_blocking=True)
 
         caption = [each + config['eos'] for each in caption]
-        caption = tokenizer(caption, padding='longest', truncation=True, max_length=config['max_words_per_cap'], return_tensors="pt").to(device)
-
+        caption = tokenizer(caption, padding='max_length', truncation=True, max_length=config['max_words_per_cap'], return_tensors="pt").to(device)
         loss = model(image, caption, is_train=True)
+        return "STOP HERE"
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -77,9 +77,12 @@ def main(config):
     test_loader = create_loader(test_ds, config['batch_size_test'], 0, False, coco_collate_fn)
 
     tokenizer = BertTokenizer.from_pretrained(config['bert_tokenizer_name'])
-    model = CocoCaptioner(tokenizer, config)
-    optimizer = create_optimizer(config['optimizer'], model)
-    lr_scheduler, _ = create_scheduler(config['scheduler'], optimizer)
+    bert_embedder = BertModel.from_pretrained(config['bert_prefix_name'])
+    model = CocoCaptioner(tokenizer, bert_embedder, config)
+    # optimizer = create_optimizer(config['optimizer'], model)
+    # lr_scheduler, _ = create_scheduler(config['scheduler'], optimizer)
+    optimizer = None
+    lr_scheduler = None
 
     print("Start training")
     start_time = time.time()
@@ -88,28 +91,28 @@ def main(config):
     warmup_steps = config['scheduler']['warmup_epochs']
 
     for epoch in range(start_epoch, max_epoch):
-        if epoch > 0:
-            lr_scheduler.step(epoch + warmup_steps)
+        # if epoch > 0:
+        #     lr_scheduler.step(epoch + warmup_steps)
 
         train_stats = train(model, train_loader, optimizer, tokenizer, epoch, warmup_steps, device, lr_scheduler, config)
 
-        caption_result = evaluation(model, test_loader, tokenizer, device, config)
-        result_file = save_result(caption_result, config['result_output_dir'], 'caption_result_epoch%d' % epoch)
-        result = cal_metric(result_file)
+        # caption_result = evaluation(model, test_loader, tokenizer, device, config)
+        # result_file = save_result(caption_result, config['result_output_dir'], 'caption_result_epoch%d' % epoch)
+        # result = cal_metric(result_file)
         
-        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                        'epoch': epoch,
-                        }
-        with open(os.path.join(config['model_output_dir'], "log.txt"), "a") as f:
-            f.write(json.dumps(log_stats) + "\n")
+        # log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+        #                 'epoch': epoch,
+        #                 }
+        # with open(os.path.join(config['model_output_dir'], "log.txt"), "a") as f:
+        #     f.write(json.dumps(log_stats) + "\n")
 
-        torch.save({
-            'model': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'lr_scheduler': lr_scheduler.state_dict(),
-            'config': config,
-            'epoch': epoch,
-        }, os.path.join(config['model_output_dir'], 'checkpoint_%02d.pth' % epoch))
+        # torch.save({
+        #     'model': model.state_dict(),
+        #     'optimizer': optimizer.state_dict(),
+        #     'lr_scheduler': lr_scheduler.state_dict(),
+        #     'config': config,
+        #     'epoch': epoch,
+        # }, os.path.join(config['model_output_dir'], 'checkpoint_%02d.pth' % epoch))
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
