@@ -19,28 +19,20 @@ class CocoCaptioner(nn.Module):
             config['num_layers'], 
             768, 
             config['nhead'], 
-            config['dim_feedforward'], 
             config['dropout']
         )
         self.memory_adapter = MemoryAdapterLayer(dim_query=768, dim_mem=512)
         self.fc = nn.Linear(768, config['vocab_size'])
 
     def _cal_loss(self, prediction, caption_ids):
-        """Calculate the loss between prediction and caption.
-        
-        Args:
-            prediction (tensor): (batch_size, max_words_per_cap, vocab_size)
-                For each word in caption, the model will predict a logit of next word.
-            caption (tensor): (batch_size, max_words_per_cap)
-                The ground truth caption. For each word in caption, it is the index of in vocabulary.
-        
-        Returns:
-            loss (tensor): (1)
-        """
-        caption_ids = caption_ids.masked_fill(caption_ids == self.tokenizer.pad_token_id, -100)
-        prediction = prediction.view(-1, prediction.size(2))
-        caption_ids = caption_ids.view(-1)
-        loss = F.cross_entropy(prediction, caption_ids, ignore_index=-100, reduction='mean')
+        shifted_caption_ids = caption_ids[:, :-1]
+        shifted_caption_ids = shifted_caption_ids.masked_fill(shifted_caption_ids == self.tokenizer.pad_token_id, -100)
+
+        prediction = prediction[:, :-1, :]
+        prediction = prediction.contiguous().view(-1, prediction.size(2))
+        shifted_caption_ids = shifted_caption_ids.contiguous().view(-1)
+
+        loss = F.cross_entropy(prediction, shifted_caption_ids, ignore_index=-100, reduction='mean')
         return loss
             
     def forward(self, image, caption=None, is_train=True):
@@ -60,17 +52,13 @@ class CocoCaptioner(nn.Module):
             # caption_embeds, image_embeds = self.memory_adapter(caption_embeds, image_embeds)
             image_embeds = nn.Linear(512, 768)(image_embeds) # (batch_size, 1, 768)
 
-            seq_len = caption_embeds.size(1)
-            self_attn_mask = torch.ones((seq_len, seq_len), device=self.config['device']).bool()
-            self_attn_mask = torch.triu(self_attn_mask, diagonal=1).bool()
             # output: (batch_size, max_words_per_cap, 768)
-            output, self.self_attn_w, self.cross_attn_w = self.text_decoder(caption_embeds, image_embeds, self_attn_mask)
-            print(output)
+            output = self.text_decoder(caption_embeds, image_embeds)
+
             # output: (batch_size, max_words_per_cap, vocab_size)
             output = self.fc(output)
-            
             prediction = F.softmax(output, dim=2)
+
             loss = self._cal_loss(prediction, caption.input_ids)
-            print(loss)
             return loss
         return image_embeds

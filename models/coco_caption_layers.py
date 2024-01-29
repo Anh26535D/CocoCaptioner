@@ -42,14 +42,18 @@ class CausalSelfAttention(nn.Module):
 
 class CrossAttention(nn.Module):
     def __init__(self, embed_dim, num_heads, dropout=0.1):
+        #x (b, 1, 768) y(b, 50, 768)
         super(CrossAttention, self).__init__()
         self.mha = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads, dropout=dropout)
         self.layernorm = nn.LayerNorm(embed_dim)
 
-    def forward(self, x, y):
-        attn_output, self.last_attention_scores = self.mha(x, y, y)
-        x = self.layernorm(x + attn_output)
-        return x
+    def forward(self, out_seq, in_seq):
+        out_seq = out_seq.transpose(0, 1)
+        in_seq = in_seq.transpose(0, 1)
+        attn_output, self.last_attention_scores = self.mha(out_seq, in_seq, in_seq)
+        out_seq = self.layernorm(out_seq + attn_output)
+        out_seq = out_seq.transpose(0, 1)
+        return out_seq
 
 
 class FeedForward(nn.Module):
@@ -72,8 +76,7 @@ class DecoderLayer(nn.Module):
         self.cross_attention = CrossAttention(embed_dim=embed_dim, num_heads=num_heads, dropout=dropout)
         self.ff = FeedForward(embed_dim=embed_dim, dropout=dropout)
 
-    def forward(self, in_seq, out_seq):
-        in_seq = in_seq.unsqueeze(0)
+    def forward(self, out_seq, in_seq):
         out_seq = self.self_attention(out_seq)
         out_seq = self.cross_attention(out_seq, in_seq)
         out_seq = self.ff(out_seq)
@@ -86,13 +89,7 @@ class TransformerDecoder(nn.Module):
         self.layers = nn.ModuleList([DecoderLayer(d_model, nhead, dropout) for _ in range(num_layers)])
 
     def forward(self, x, memory):
-        self_attention_weights_list = []
-        cross_attention_weights_list = []
-
         for layer in self.layers:
-            x, self_attention_weights, cross_attention_weights = layer(x, memory)
-            print(x)
-            self_attention_weights_list.append(self_attention_weights)
-            cross_attention_weights_list.append(cross_attention_weights)
+            x = layer(x, memory)
 
-        return x, self_attention_weights_list, cross_attention_weights_list
+        return x
