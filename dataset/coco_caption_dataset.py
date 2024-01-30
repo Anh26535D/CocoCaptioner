@@ -11,9 +11,10 @@ Image.MAX_IMAGE_PIXELS = None
 
 
 class coco_dataset(Dataset):
-    def __init__(self, ann_file, transform, root_path, max_words_per_cap=30, is_train=True):
+    def __init__(self, ann_file, transform, root_path, max_words_per_cap=30, is_train=True, verbose=False):
         with open(ann_file, 'r') as f:
             self.ann = json.load(f)
+        self.verbose = verbose
         self.transform = transform
         self.root_path = root_path
         self.max_words_per_cap = max_words_per_cap
@@ -42,7 +43,8 @@ class coco_dataset(Dataset):
             if response.status_code == 200:
                 image = Image.open(BytesIO(response.content))
                 image.save(save_path)
-                print(f"Image saved successfully to {save_path}")
+                if self.verbose:
+                    print(f"Image saved successfully to {save_path}")
             else:
                 print(f"Failed to download image. Status code: {response.status_code}")
         except Exception as e:
@@ -56,8 +58,8 @@ class coco_dataset(Dataset):
         image_path = os.path.join(self.root_path, ann['filename'])
         if not os.path.exists(image_path):
             self._download_image(ann['coco_url'], os.path.join(self.root_path, ann['filename']))
-        else:
-            print(f"Image already exists at {image_path}")
+        elif self.verbose:
+                print(f"Image already exists at {image_path}")
 
         image = Image.open(image_path).convert('RGB')
         image = self.transform(image)

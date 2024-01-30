@@ -15,6 +15,8 @@ class CocoCaptioner(nn.Module):
         self.positional_embedding = nn.Embedding(config['max_words_per_cap'], 768)
 
         self.visual_encoder, _ = initialize_clip(config)
+        self.img_emb_transform = nn.Linear(512, 768)
+
         self.text_decoder = TransformerDecoder(
             config['num_layers'], 
             768, 
@@ -50,7 +52,7 @@ class CocoCaptioner(nn.Module):
             caption_embeds = caption_embeds + positional_embeddings
 
             # caption_embeds, image_embeds = self.memory_adapter(caption_embeds, image_embeds)
-            image_embeds = nn.Linear(512, 768)(image_embeds) # (batch_size, 1, 768)
+            image_embeds = self.img_emb_transform(image_embeds) # (batch_size, 1, 768)
 
             # output: (batch_size, max_words_per_cap, 768)
             output = self.text_decoder(caption_embeds, image_embeds)
@@ -61,4 +63,39 @@ class CocoCaptioner(nn.Module):
 
             loss = self._cal_loss(prediction, caption.input_ids)
             return loss
-        return image_embeds
+        else:
+            cap = self.generate_caption(image)
+            return cap
+    
+    def generate_caption(self, image, temperature=1.0, max_length=50):
+        # image: (batch_size, 3, 224, 224)
+        image = image.to(dtype=next(self.parameters()).dtype) 
+        # image_embeds: (batch_size, 512)
+        image_embeds = self.visual_encoder.get_image_features(image)
+        image_embeds = image_embeds.unsqueeze(1) # (batch_size, 1, 512)
+        image_embeds = self.img_emb_transform(image_embeds)
+
+        initial_tokens = [self.tokenizer.cls_token_id] * image_embeds.size(0)
+        tokens = torch.tensor(initial_tokens, device=image_embeds.device).unsqueeze(-1)  # (batch_size, 1)
+
+        for _ in range(max_length):
+            token_embeds = self.word_embedder(tokens)[0]  # (batch_size, seq_len, embed_dim)
+
+            # Generate next token
+            output = self.text_decoder(token_embeds, image_embeds)
+            output = self.fc(output[:, -1, :])  # Chỉ lấy embedding của từ cuối cùng
+            if temperature == 0:
+                next_token = torch.argmax(output, dim=-1).unsqueeze(-1)
+            else:
+                output = output / temperature
+                next_token = torch.multinomial(F.softmax(output, dim=-1), num_samples=1)
+
+            tokens = torch.cat([tokens, next_token], dim=1)
+
+            # Check if <sep> token is generated
+            if torch.all(next_token == self.tokenizer.sep_token_id):
+                break
+
+        # Decode tokens to captions
+        results = [self.tokenizer.decode(t, skip_special_tokens=True) for t in tokens]
+        return results

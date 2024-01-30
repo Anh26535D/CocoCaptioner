@@ -8,7 +8,7 @@ from dataset.coco_caption_dataset import coco_dataset
 from dataset.randaugment import RandomAugment
 
 
-def create_dataset(config):
+def create_dataset(config, verbose=False):
     normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
      
     train_transform = transforms.Compose([                        
@@ -27,9 +27,9 @@ def create_dataset(config):
         ])   
     
 
-    train_dataset = coco_dataset(config['train_file'], train_transform, config['coco_root'], max_words_per_cap=config['max_words_per_cap'], is_train=True)
-    val_dataset = coco_dataset(config['val_file'], test_transform, config['coco_root'], max_words_per_cap=config['max_words_per_cap'], is_train=False)
-    test_dataset = coco_dataset(config['test_file'], test_transform, config['coco_root'], max_words_per_cap=config['max_words_per_cap'], is_train=False)
+    train_dataset = coco_dataset(config['train_file'], train_transform, config['coco_root'], max_words_per_cap=config['max_words_per_cap'], is_train=True, verbose=verbose)
+    val_dataset = coco_dataset(config['val_file'], test_transform, config['coco_root'], max_words_per_cap=config['max_words_per_cap'], is_train=False, verbose=verbose)
+    test_dataset = coco_dataset(config['test_file'], test_transform, config['coco_root'], max_words_per_cap=config['max_words_per_cap'], is_train=False, verbose=verbose)
     return train_dataset, val_dataset, test_dataset  
 
 

@@ -4,6 +4,7 @@ import numpy as np
 import random
 import time
 import datetime
+from tqdm import tqdm
 
 import torch
 import ruamel.yaml as yaml
@@ -16,7 +17,7 @@ from scheduler import create_scheduler
 import utils
 
 
-def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device, scheduler, config):
+def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device, scheduler, config, save_on_batch=False):
     model.train()
 
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -34,7 +35,7 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
         caption = [each + config['eos'] for each in caption]
         caption = tokenizer(caption, padding='max_length', truncation=True, max_length=config['max_words_per_cap'], return_tensors="pt").to(device)
         loss = model(image, caption, is_train=True)
-        return "STOP HERE"
+        print("Loss here:", loss * 1000)
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -45,7 +46,15 @@ def train(model, data_loader, optimizer, tokenizer, epoch, warmup_steps, device,
         if epoch == 0 and i % step_size == 0 and i <= warmup_iterations:
             scheduler.step(i // step_size)
         
-        del image, question_input,caption,loss 
+        del image, caption, loss
+        if save_on_batch:
+            torch.save({
+                'model': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'lr_scheduler': scheduler.state_dict(),
+                'config': config,
+                'epoch': epoch,
+            }, os.path.join(config['model_output_dir'], f'batch_{i}_checkpoint_%02d.pth' % epoch))
 
     print("Averaged stats:", metric_logger.global_avg())
     return {k: "{:.3f}".format(meter.global_avg) for k, meter in metric_logger.meters.items()}
@@ -79,10 +88,8 @@ def main(config):
     tokenizer = BertTokenizer.from_pretrained(config['bert_tokenizer_name'])
     bert_embedder = BertModel.from_pretrained(config['bert_prefix_name'])
     model = CocoCaptioner(tokenizer, bert_embedder, config)
-    # optimizer = create_optimizer(config['optimizer'], model)
-    # lr_scheduler, _ = create_scheduler(config['scheduler'], optimizer)
-    optimizer = None
-    lr_scheduler = None
+    optimizer = create_optimizer(config['optimizer'], model)
+    lr_scheduler, _ = create_scheduler(config['scheduler'], optimizer)
 
     print("Start training")
     start_time = time.time()
@@ -91,10 +98,10 @@ def main(config):
     warmup_steps = config['scheduler']['warmup_epochs']
 
     for epoch in range(start_epoch, max_epoch):
-        # if epoch > 0:
-        #     lr_scheduler.step(epoch + warmup_steps)
+        if epoch > 0:
+            lr_scheduler.step(epoch + warmup_steps)
 
-        train_stats = train(model, train_loader, optimizer, tokenizer, epoch, warmup_steps, device, lr_scheduler, config)
+        train_stats = train(model, train_loader, optimizer, tokenizer, epoch, warmup_steps, device, lr_scheduler, config, save_on_batch=True)
 
         # caption_result = evaluation(model, test_loader, tokenizer, device, config)
         # result_file = save_result(caption_result, config['result_output_dir'], 'caption_result_epoch%d' % epoch)
@@ -106,13 +113,13 @@ def main(config):
         # with open(os.path.join(config['model_output_dir'], "log.txt"), "a") as f:
         #     f.write(json.dumps(log_stats) + "\n")
 
-        # torch.save({
-        #     'model': model.state_dict(),
-        #     'optimizer': optimizer.state_dict(),
-        #     'lr_scheduler': lr_scheduler.state_dict(),
-        #     'config': config,
-        #     'epoch': epoch,
-        # }, os.path.join(config['model_output_dir'], 'checkpoint_%02d.pth' % epoch))
+        torch.save({
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'lr_scheduler': lr_scheduler.state_dict(),
+            'config': config,
+            'epoch': epoch,
+        }, os.path.join(config['model_output_dir'], 'checkpoint_%02d.pth' % epoch))
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

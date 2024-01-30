@@ -1,6 +1,7 @@
 import time
 from collections import defaultdict, deque
 import datetime
+from tqdm import tqdm
 
 import torch
 
@@ -114,7 +115,7 @@ class MetricLogger(object):
             log_msg.append('max mem: {memory:.0f}')
         log_msg = self.delimiter.join(log_msg)
         MB = 1024.0 * 1024.0
-        for obj in iterable:
+        for obj in tqdm(iterable):
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
